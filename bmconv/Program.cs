@@ -106,7 +106,8 @@ namespace OpenCGSS.Tools.BeatmapConverter {
                 case ConversionTypes.ToTxt: {
                         try {
                             using (var fileStream = outputFileInfo.Open(FileMode.Create, FileAccess.Write)) {
-                                using (var writer = new StreamWriter(fileStream, Encoding.UTF8)) {
+                                var utf8 = new UTF8Encoding(false);
+                                using (var writer = new StreamWriter(fileStream, utf8)) {
                                     DelesteHelper.WriteDelesteBeatmap(score, selectedDifficulty, writer);
                                 }
                             }
