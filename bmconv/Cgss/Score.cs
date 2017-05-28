@@ -218,8 +218,7 @@ namespace OpenCGSS.Tools.BeatmapConverter.Cgss {
         private void UpdateNotesInfo() {
             var notes = _editableNotes;
             var holdNotesToBeMatched = new List<Note>();
-            var flickGroupNoteCount = new Dictionary<int, int>();
-            var slideGroupNoteCount = new Dictionary<int, int>();
+            var flickOrSlideGroupCount = new Dictionary<int, int>();
             var i = 0;
             foreach (var note in notes) {
                 switch (note.Type) {
@@ -229,13 +228,13 @@ namespace OpenCGSS.Tools.BeatmapConverter.Cgss {
                             note.SyncPairNote = syncPairItem ?? throw new FormatException($"Missing sync pair note at note ID #{note.ID}.");
                         }
                         if (note.IsFlick) {
-                            if (!flickGroupNoteCount.ContainsKey(note.GroupID)) {
-                                flickGroupNoteCount.Add(note.GroupID, 0);
+                            if (!flickOrSlideGroupCount.ContainsKey(note.GroupID)) {
+                                flickOrSlideGroupCount.Add(note.GroupID, 0);
                             }
-                            ++flickGroupNoteCount[note.GroupID];
-                            var nextFlickItem = notes.Skip(i + 1).FirstOrDefault(n => (n.IsFlick || n.IsSlide) && n.GroupID != 0 && n.GroupID == note.GroupID);
+                            ++flickOrSlideGroupCount[note.GroupID];
+                            var nextFlickItem = notes.Skip(i + 1).FirstOrDefault(n => n.IsFlick && n.GroupID != 0 && n.GroupID == note.GroupID);
                             if (nextFlickItem == null) {
-                                if (flickGroupNoteCount[note.GroupID] < 2) {
+                                if (flickOrSlideGroupCount[note.GroupID] < 2) {
                                     Debug.WriteLine($"[WARNING] No enough flick notes to form a flick group at note ID #{note.ID}, group ID {note.GroupID}.");
                                 }
                             } else {
@@ -257,7 +256,7 @@ namespace OpenCGSS.Tools.BeatmapConverter.Cgss {
                             holdNotesToBeMatched.Remove(note);
                             break;
                         }
-                        var endHoldItem = notes.Skip(i + 1).FirstOrDefault(n => n.FinishPosition == note.FinishPosition);
+                        var endHoldItem = notes.Skip(i + 1).FirstOrDefault(n => !n.IsHold && !n.IsSlide && n.FinishPosition == note.FinishPosition);
                         if (endHoldItem == null) {
                             throw new FormatException($"Missing end hold note at note ID #{note.ID}.");
                         }
@@ -269,8 +268,8 @@ namespace OpenCGSS.Tools.BeatmapConverter.Cgss {
                         holdNotesToBeMatched.Add(endHoldItem);
                         break;
                     case NoteType.Slide:
-                        if (!slideGroupNoteCount.ContainsKey(note.GroupID)) {
-                            slideGroupNoteCount.Add(note.GroupID, 0);
+                        if (!flickOrSlideGroupCount.ContainsKey(note.GroupID)) {
+                            flickOrSlideGroupCount.Add(note.GroupID, 0);
                         }
                         if (note.IsSync) {
                             var syncPairItem = notes.FirstOrDefault(n => n != note && n.HitTiming.Equals(note.HitTiming) && n.IsSync);
@@ -280,18 +279,20 @@ namespace OpenCGSS.Tools.BeatmapConverter.Cgss {
                             holdNotesToBeMatched.Remove(note);
                             break;
                         }
-                        var nextSlideItem = notes.Skip(i + 1).FirstOrDefault(n => (n.IsSlide || n.IsFlick) && n.GroupID == note.GroupID);
+                        var nextSlideItem = notes.Skip(i + 1).FirstOrDefault(n => n.IsSlide && n.GroupID != 0 && n.GroupID == note.GroupID);
                         if (nextSlideItem == null) {
-                            if (slideGroupNoteCount[note.GroupID] < 2) {
-                                Debug.WriteLine($"[WARNING] No enough slide notes to form a slide group at note ID #{note.ID}, group ID {note.GroupID}.");
+                            var nextFlickItem = notes.Skip(i + 1).FirstOrDefault(n => n.IsFlick && n.GroupID != 0 && n.GroupID == note.GroupID);
+                            if (nextFlickItem != null) {
+                                note.NextFlickNote = nextFlickItem;
+                                nextFlickItem.PrevSlideNote = note;
+                            } else {
+                                if (flickOrSlideGroupCount[note.GroupID] < 2) {
+                                    Debug.WriteLine($"[WARNING] No enough slide notes to form a slide group at note ID #{note.ID}, group ID {note.GroupID}.");
+                                }
                             }
                         } else {
                             note.NextSlideNote = nextSlideItem;
                             nextSlideItem.PrevHoldNote = note;
-                            if (nextSlideItem.FlickType != NoteStatus.Tap) {
-                                note.NextFlickNote = nextSlideItem;
-                                nextSlideItem.PrevFlickNote = note;
-                            }
                         }
                         break;
                 }
